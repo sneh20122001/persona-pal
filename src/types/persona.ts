@@ -8,6 +8,7 @@ export interface Persona {
   communicationStyle: string;
   background: string;
   createdAt: number;
+  avatar?: string; // base64 data URL
 }
 
 export interface ChatMessage {

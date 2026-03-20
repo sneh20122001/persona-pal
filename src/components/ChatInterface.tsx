@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Persona, ChatMessage } from "@/types/persona";
 import { Button } from "@/components/ui/button";
-import { Send, ArrowLeft, Bot, User, AlertCircle } from "lucide-react";
+import { Send, ArrowLeft, User } from "lucide-react";
 import { toast } from "sonner";
 
 interface ChatInterfaceProps {
@@ -22,12 +22,31 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-function TypingIndicator() {
+function PersonaAvatar({ persona, size = "sm" }: { persona: Persona; size?: "sm" | "md" | "lg" }) {
+  const sizeClasses = {
+    sm: "w-8 h-8 text-xs",
+    md: "w-9 h-9 text-sm",
+    lg: "w-11 h-11 text-sm",
+  };
+
+  if (persona.avatar) {
+    return (
+      <div className={`${sizeClasses[size]} rounded-full overflow-hidden flex-shrink-0 border border-primary/30`}>
+        <img src={persona.avatar} alt={persona.name} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div className={`${sizeClasses[size]} rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0 font-bold text-primary`}>
+      {getInitials(persona.name)}
+    </div>
+  );
+}
+
+function TypingIndicator({ persona }: { persona: Persona }) {
   return (
     <div className="flex items-end gap-2.5 animate-fade-in-up">
-      <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-primary">
-        AI
-      </div>
+      <PersonaAvatar persona={persona} size="sm" />
       <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3">
         <div className="flex gap-1 items-center h-4">
           <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground typing-dot" />
@@ -157,8 +176,8 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
         >
           <ArrowLeft size={16} />
         </Button>
-        <div className="w-9 h-9 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center font-bold text-primary text-sm pulse-ring flex-shrink-0">
-          {getInitials(persona.name)}
+        <div className="pulse-ring rounded-full flex-shrink-0">
+          <PersonaAvatar persona={persona} size="md" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-sm truncate">{persona.name}</div>
@@ -197,15 +216,13 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
             }`}
           >
             {/* Avatar */}
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                msg.role === "assistant"
-                  ? "bg-primary/20 border border-primary/30 text-primary"
-                  : "bg-secondary border border-border text-muted-foreground"
-              }`}
-            >
-              {msg.role === "assistant" ? getInitials(persona.name) : <User size={14} />}
-            </div>
+            {msg.role === "assistant" ? (
+              <PersonaAvatar persona={persona} size="sm" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center flex-shrink-0 text-muted-foreground">
+                <User size={14} />
+              </div>
+            )}
 
             {/* Bubble */}
             <div
@@ -222,7 +239,7 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
           </div>
         ))}
 
-        {isLoading && <TypingIndicator />}
+        {isLoading && <TypingIndicator persona={persona} />}
         <div ref={bottomRef} />
       </div>
 

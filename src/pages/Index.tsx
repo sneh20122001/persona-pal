@@ -47,8 +47,12 @@ function PersonaCard({
       )}
 
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center font-bold text-primary text-sm flex-shrink-0">
-          {getInitials(persona.name)}
+        <div className="w-11 h-11 rounded-full overflow-hidden border border-primary/30 bg-primary/15 flex items-center justify-center font-bold text-primary text-sm flex-shrink-0">
+          {persona.avatar ? (
+            <img src={persona.avatar} alt={persona.name} className="w-full h-full object-cover" />
+          ) : (
+            getInitials(persona.name)
+          )}
         </div>
         <div className="min-w-0">
           <div className="font-semibold text-sm truncate pr-14">{persona.name}</div>
