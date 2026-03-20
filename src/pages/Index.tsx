@@ -3,7 +3,7 @@ import { Persona } from "@/types/persona";
 import PersonaForm from "@/components/PersonaForm";
 import ChatInterface from "@/components/ChatInterface";
 import { Button } from "@/components/ui/button";
-import { Plus, MessageCircle, Pencil, Trash2, Bot, Sparkles, Clock, Zap } from "lucide-react";
+import { Plus, MessageCircle, Pencil, Trash2, Bot, Sparkles, Clock, Zap, Copy } from "lucide-react";
 import { Toaster } from "sonner";
 
 const PRELOADED_PERSONA: Persona = {
@@ -28,11 +28,13 @@ function PersonaCard({
   onChat,
   onEdit,
   onDelete,
+  onClone,
 }: {
   persona: Persona;
   onChat: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onClone: () => void;
 }) {
   const skills = persona.skills.split(",").slice(0, 3).map((s) => s.trim());
   const isDefault = persona.id === "sneh-default";
@@ -97,6 +99,16 @@ function PersonaCard({
         >
           <Pencil size={13} />
         </Button>
+        <Button
+          onClick={onClone}
+          size="sm"
+          variant="outline"
+          className="h-8 w-8 p-0 border-border text-muted-foreground hover:text-foreground"
+          aria-label={`Clone ${persona.name}`}
+          title="Clone persona"
+        >
+          <Copy size={13} />
+        </Button>
         {!isDefault && (
           <Button
             onClick={onDelete}
@@ -140,6 +152,17 @@ export default function Index() {
 
   const startEdit = (p: Persona) => {
     setEditingPersona(p);
+    setView("edit");
+  };
+
+  const startClone = (p: Persona) => {
+    const clone: Persona = {
+      ...p,
+      id: crypto.randomUUID(),
+      name: `${p.name} Clone`,
+      createdAt: Date.now(),
+    };
+    setEditingPersona(clone);
     setView("edit");
   };
 
@@ -243,6 +266,7 @@ export default function Index() {
                   onChat={() => startChat(p)}
                   onEdit={() => startEdit(p)}
                   onDelete={() => deletePersona(p.id)}
+                  onClone={() => startClone(p)}
                 />
               ))}
             </div>

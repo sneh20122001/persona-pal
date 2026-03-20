@@ -9,6 +9,7 @@ export interface Persona {
   background: string;
   createdAt: number;
   avatar?: string; // base64 data URL
+  gender?: "male" | "female";
 }
 
 export interface ChatMessage {

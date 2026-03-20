@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Persona, ChatMessage } from "@/types/persona";
 import { Button } from "@/components/ui/button";
-import { Send, ArrowLeft, User } from "lucide-react";
+import { Send, ArrowLeft, User, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 
 interface ChatInterfaceProps {
@@ -12,6 +12,32 @@ interface ChatInterfaceProps {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/persona-chat`;
 const MAX_MEMORY = 5;
+
+type SpeechRecognitionErrorEvent = { error?: string };
+type SpeechRecognitionAlternative = { transcript: string };
+type SpeechRecognitionResult = {
+  isFinal: boolean;
+  0: SpeechRecognitionAlternative;
+};
+type SpeechRecognitionEvent = { resultIndex: number; results: SpeechRecognitionResult[] };
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: null | (() => void);
+  onend: null | (() => void);
+  onerror: null | ((event: SpeechRecognitionErrorEvent) => void);
+  onresult: null | ((event: SpeechRecognitionEvent) => void);
+  start: () => void;
+  stop: () => void;
+};
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  }
+}
 
 function getInitials(name: string) {
   return name
@@ -59,32 +85,204 @@ function TypingIndicator({ persona }: { persona: Persona }) {
 }
 
 export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
+  const getGreeting = (): ChatMessage => ({
+    role: "assistant",
+    content: `Hi! I'm ${persona.name}, a ${persona.role}. Ask me anything — I'm here to help with my expertise in ${persona.skills
+      .split(",")[0]
+      .trim()} and more.`,
+  });
+
+  const chatStorageKey = `personaChatMessages:${persona.id}`;
+  const historyLoadedRef = useRef(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: `Hi! I'm ${persona.name}, a ${persona.role}. Ask me anything — I'm here to help with my expertise in ${persona.skills.split(",")[0].trim()} and more.`,
+      content: getGreeting().content,
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceModeRef = useRef(voiceMode);
+  const isLoadingRef = useRef(isLoading);
+  const messagesRef = useRef<ChatMessage[]>(messages);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    // Load conversation history per persona.
+    // This runs when switching personas (persona.id changes).
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem(chatStorageKey);
+      if (!raw) {
+        historyLoadedRef.current = true;
+        setMessages([getGreeting()]);
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error("Invalid stored chat payload");
+
+      const restored = parsed.filter((m) => m && typeof m === "object" && (m.role === "user" || m.role === "assistant") && typeof m.content === "string") as ChatMessage[];
+
+      historyLoadedRef.current = true;
+      setMessages(restored.length ? restored : [getGreeting()]);
+    } catch {
+      // If localStorage is corrupted, fall back to a fresh greeting.
+      historyLoadedRef.current = true;
+      setMessages([getGreeting()]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persona.id]);
+
+  useEffect(() => {
+    // Persist conversation only after it fully rendered (not while streaming).
+    if (!historyLoadedRef.current) return;
+    if (typeof window === "undefined") return;
+    if (isLoading) return;
+
+    try {
+      window.localStorage.setItem(chatStorageKey, JSON.stringify(messages));
+    } catch {
+      // Ignore quota/security errors.
+    }
+  }, [messages, isLoading, chatStorageKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || isLoading) return;
+  const setIsLoadingSafe = (v: boolean) => {
+    isLoadingRef.current = v;
+    setIsLoading(v);
+  };
+
+  const cancelSpeech = () => {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  };
+
+  const speakText = (text: string) => {
+    if (!voiceModeRef.current) return;
+    if (!("speechSynthesis" in window)) {
+      toast.error("Text-to-speech is not supported in this browser.");
+      return;
+    }
+
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (!normalized) return;
+    if (normalized.length > 8000) {
+      toast.error("Response too long to read aloud fully.");
+    }
+
+    cancelSpeech();
+    const utterance = new SpeechSynthesisUtterance(normalized.slice(0, 8000));
+    utterance.lang = navigator.language || "en-US";
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  useEffect(() => {
+    // Initialize SpeechRecognition once (if supported).
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || "en-US";
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
+      setIsListening(false);
+      if (voiceModeRef.current) {
+        toast.error(e?.error === "not-allowed" ? "Microphone permission denied." : "Voice input error.");
+      }
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Combine transcript pieces into a single string.
+      let finalTranscript = "";
+      let interimTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const chunk = result?.[0]?.transcript ?? "";
+        if (result.isFinal) finalTranscript += chunk;
+        else interimTranscript += chunk;
+      }
+
+      const transcriptToShow = finalTranscript || interimTranscript;
+      if (transcriptToShow) setInput(transcriptToShow);
+
+      // When we have a final transcript, optionally auto-send.
+      if (finalTranscript && voiceModeRef.current && !isLoadingRef.current) {
+        try {
+          recognition.stop();
+        } catch {
+          // Some browsers throw if stop() is called too late.
+        }
+        sendMessage(finalTranscript);
+      }
+    };
+
+    recognitionRef.current = recognition;
+    return () => {
+      try {
+        recognition.stop();
+      } catch {
+        // ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!voiceMode) {
+      setIsListening(false);
+      cancelSpeech();
+      try {
+        recognitionRef.current?.stop?.();
+      } catch {
+        // ignore
+      }
+    }
+  }, [voiceMode]);
+
+  const sendMessage = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
+    if (!text || isLoadingRef.current) return;
 
     const userMsg: ChatMessage = { role: "user", content: text };
+    setIsLoadingSafe(true);
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    setIsLoading(true);
 
     // Keep last MAX_MEMORY messages for context (exclude the greeting)
-    const history = [...messages.slice(1), userMsg].slice(-MAX_MEMORY);
+    const history = [...messagesRef.current.slice(1), userMsg].slice(-MAX_MEMORY);
 
     try {
       const resp = await fetch(CHAT_URL, {
@@ -115,7 +313,6 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
 
       // Insert placeholder assistant message
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-      setIsLoading(false);
 
       while (!streamDone) {
         const { done, value } = await reader.read();
@@ -150,10 +347,15 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
           }
         }
       }
+
+      setIsLoadingSafe(false);
+      if (voiceModeRef.current && assistantText.trim()) {
+        speakText(assistantText);
+      }
     } catch (e) {
       console.error(e);
       toast.error("Connection error. Please try again.");
-      setIsLoading(false);
+      setIsLoadingSafe(false);
     }
   };
 
@@ -258,7 +460,60 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
             style={{ minHeight: "42px" }}
           />
           <Button
-            onClick={sendMessage}
+            variant="outline"
+            size="icon"
+            type="button"
+            aria-label={voiceMode ? "Disable voice mode" : "Enable voice mode"}
+            title={voiceMode ? "Voice mode: on (speaks responses)" : "Voice mode: off"}
+            onClick={() => {
+              if (!voiceMode) {
+                const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognitionCtor) {
+                  toast.error("Speech recognition is not supported in this browser.");
+                  return;
+                }
+                if (!("speechSynthesis" in window)) {
+                  toast.error("Text-to-speech is not supported in this browser.");
+                  return;
+                }
+              }
+              setVoiceMode((v) => !v);
+            }}
+            className="h-10 w-10 rounded-xl flex-shrink-0"
+          >
+            {voiceMode ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="icon"
+            type="button"
+            aria-label={isListening ? "Stop listening" : "Start listening"}
+            title={voiceMode ? (isListening ? "Stop voice input" : "Speak to send") : "Enable voice mode first"}
+            onClick={() => {
+              const recognition = recognitionRef.current;
+              if (!voiceMode) return;
+              if (!recognition) {
+                toast.error("Voice input is not available in this browser.");
+                return;
+              }
+              if (isLoadingRef.current) return;
+
+              try {
+                if (isListening) recognition.stop();
+                else recognition.start();
+              } catch {
+                // Some browsers throw if start() is called while already starting.
+              }
+            }}
+            disabled={!voiceMode || isLoading}
+            className="h-10 w-10 rounded-xl flex-shrink-0"
+          >
+            {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+          </Button>
+
+          <Button
+            onClick={() => sendMessage()}
             disabled={!input.trim() || isLoading}
             size="icon"
             className="h-10 w-10 bg-primary text-primary-foreground hover:opacity-90 rounded-xl flex-shrink-0 disabled:opacity-30"

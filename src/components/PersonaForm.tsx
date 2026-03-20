@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { User, Briefcase, Clock, Zap, Heart, MessageSquare, FileText, X, Sparkles, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +32,7 @@ export default function PersonaForm({ onSave, onCancel, existing }: PersonaFormP
     avatar: existing?.avatar ?? "",
   });
   const [generatingAvatar, setGeneratingAvatar] = useState(false);
+  const [avatarGender, setAvatarGender] = useState<"male" | "female">(existing?.gender ?? "female");
 
   const set = (key: keyof typeof form, val: string) =>
     setForm((p) => ({ ...p, [key]: val }));
@@ -55,7 +57,7 @@ export default function PersonaForm({ onSave, onCancel, existing }: PersonaFormP
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ name: form.name, role: form.role, traits: form.traits }),
+        body: JSON.stringify({ name: form.name, role: form.role, traits: form.traits, gender: avatarGender }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -63,7 +65,7 @@ export default function PersonaForm({ onSave, onCancel, existing }: PersonaFormP
         return;
       }
       setForm((p) => ({ ...p, avatar: data.avatar }));
-      toast.success("Avatar generated!");
+      toast.success(`Avatar generated${data.usedGender ? ` (${data.usedGender})` : ""}!`);
     } catch (e) {
       toast.error("Failed to generate avatar");
     } finally {
@@ -76,6 +78,7 @@ export default function PersonaForm({ onSave, onCancel, existing }: PersonaFormP
     if (!form.name.trim() || !form.role.trim()) return;
     onSave({
       ...form,
+      gender: avatarGender,
       id: existing?.id ?? crypto.randomUUID(),
       createdAt: existing?.createdAt ?? Date.now(),
     });
@@ -160,6 +163,20 @@ export default function PersonaForm({ onSave, onCancel, existing }: PersonaFormP
           className="bg-input border-border focus:border-primary text-sm"
           required
         />
+      </div>
+
+      {/* Gender */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avatar gender</Label>
+        <Select value={avatarGender} onValueChange={(v) => setAvatarGender(v as "male" | "female")}>
+          <SelectTrigger className="bg-input border-border">
+            <SelectValue placeholder="Select gender" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Experience */}

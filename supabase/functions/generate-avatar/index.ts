@@ -12,14 +12,27 @@ serve(async (req) => {
   }
 
   try {
-    const { name, role, traits } = await req.json();
+    const { name, role, traits, gender } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    const normalizedGender = typeof gender === "string" ? gender.toLowerCase() : undefined;
+
+    const usedGender = normalizedGender === "male" || normalizedGender === "female" ? normalizedGender : "unspecified";
+
+    // Stronger gender conditioning. Image models can ignore vague wording, so we keep it explicit.
+    const genderInstruction =
+      usedGender === "male"
+        ? "GENDER (MUST FOLLOW): Male. Depict a man/boy/men with clearly masculine traits: angular jawline, more prominent cheek/zygoma structure, and typically shorter, less feminine hair styling. Avoid feminine-coded traits (soft jawline, typically feminine grooming)."
+        : usedGender === "female"
+          ? "GENDER (MUST FOLLOW): Female. Depict a woman/girl/women with clearly feminine traits: softer jawline/cheek structure, and typically longer/more feminine hair styling. Avoid masculine-coded traits (typically masculine jawline, masculine grooming)."
+          : "GENDER: Unspecified. Depict a professional person appropriate for the role without forcing male/female.";
+
     const prompt = `Create a professional AI-generated avatar portrait for ${name}, a ${role}. 
+${genderInstruction}
 Personality: ${traits || "professional"}.
 Style: Digital illustration, clean professional headshot, soft gradient background matching their tech/professional vibe, subtle futuristic aesthetic. 
 The face should look distinct, expressive, and human-like. Square composition, centered portrait, no text or labels.`;
@@ -59,7 +72,7 @@ The face should look distinct, expressive, and human-like. Square composition, c
       );
     }
 
-    return new Response(JSON.stringify({ avatar: imageUrl }), {
+    return new Response(JSON.stringify({ avatar: imageUrl, usedGender }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
