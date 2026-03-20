@@ -176,8 +176,8 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
         >
           <ArrowLeft size={16} />
         </Button>
-        <div className="w-9 h-9 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center font-bold text-primary text-sm pulse-ring flex-shrink-0">
-          {getInitials(persona.name)}
+        <div className="pulse-ring rounded-full flex-shrink-0">
+          <PersonaAvatar persona={persona} size="md" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-sm truncate">{persona.name}</div>
