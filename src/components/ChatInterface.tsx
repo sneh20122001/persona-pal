@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Persona, ChatMessage } from "@/types/persona";
 import { Button } from "@/components/ui/button";
-import { Send, ArrowLeft, Bot, User, AlertCircle } from "lucide-react";
+import { Send, ArrowLeft, User } from "lucide-react";
 import { toast } from "sonner";
 
 interface ChatInterfaceProps {
