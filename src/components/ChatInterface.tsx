@@ -22,12 +22,31 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-function TypingIndicator() {
+function PersonaAvatar({ persona, size = "sm" }: { persona: Persona; size?: "sm" | "md" | "lg" }) {
+  const sizeClasses = {
+    sm: "w-8 h-8 text-xs",
+    md: "w-9 h-9 text-sm",
+    lg: "w-11 h-11 text-sm",
+  };
+
+  if (persona.avatar) {
+    return (
+      <div className={`${sizeClasses[size]} rounded-full overflow-hidden flex-shrink-0 border border-primary/30`}>
+        <img src={persona.avatar} alt={persona.name} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div className={`${sizeClasses[size]} rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0 font-bold text-primary`}>
+      {getInitials(persona.name)}
+    </div>
+  );
+}
+
+function TypingIndicator({ persona }: { persona: Persona }) {
   return (
     <div className="flex items-end gap-2.5 animate-fade-in-up">
-      <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-primary">
-        AI
-      </div>
+      <PersonaAvatar persona={persona} size="sm" />
       <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3">
         <div className="flex gap-1 items-center h-4">
           <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground typing-dot" />
