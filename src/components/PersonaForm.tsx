@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { User, Briefcase, Clock, Zap, Heart, MessageSquare, FileText, X } from "lucide-react";
+import { User, Briefcase, Clock, Zap, Heart, MessageSquare, FileText, X, Sparkles, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 interface PersonaFormProps {
   onSave: (persona: Persona) => void;
@@ -15,6 +16,9 @@ interface PersonaFormProps {
 const STYLE_OPTIONS = ["formal", "casual", "mentor-like", "direct", "analytical"];
 const TRAIT_SUGGESTIONS = ["analytical", "friendly", "strict", "creative", "empathetic", "leadership", "problem-solver", "detail-oriented"];
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const AVATAR_URL = `${SUPABASE_URL}/functions/v1/generate-avatar`;
+
 export default function PersonaForm({ onSave, onCancel, existing }: PersonaFormProps) {
   const [form, setForm] = useState<Omit<Persona, "id" | "createdAt">>({
     name: existing?.name ?? "",
@@ -24,15 +28,46 @@ export default function PersonaForm({ onSave, onCancel, existing }: PersonaFormP
     traits: existing?.traits ?? "",
     communicationStyle: existing?.communicationStyle ?? "formal",
     background: existing?.background ?? "",
+    avatar: existing?.avatar ?? "",
   });
+  const [generatingAvatar, setGeneratingAvatar] = useState(false);
 
   const set = (key: keyof typeof form, val: string) =>
     setForm((p) => ({ ...p, [key]: val }));
 
   const addTrait = (t: string) => {
-    const existing = form.traits.split(",").map((s) => s.trim()).filter(Boolean);
-    if (!existing.includes(t)) {
-      set("traits", [...existing, t].join(", "));
+    const current = form.traits.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!current.includes(t)) {
+      set("traits", [...current, t].join(", "));
+    }
+  };
+
+  const generateAvatar = async () => {
+    if (!form.name.trim() || !form.role.trim()) {
+      toast.error("Fill in Name and Role first");
+      return;
+    }
+    setGeneratingAvatar(true);
+    try {
+      const res = await fetch(AVATAR_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ name: form.name, role: form.role, traits: form.traits }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        toast.error(data.error ?? "Avatar generation failed");
+        return;
+      }
+      setForm((p) => ({ ...p, avatar: data.avatar }));
+      toast.success("Avatar generated!");
+    } catch (e) {
+      toast.error("Failed to generate avatar");
+    } finally {
+      setGeneratingAvatar(false);
     }
   };
 
@@ -46,8 +81,59 @@ export default function PersonaForm({ onSave, onCancel, existing }: PersonaFormP
     });
   };
 
+  const canGenerateAvatar = form.name.trim().length > 0 && form.role.trim().length > 0;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Avatar Preview */}
+      <div className="flex items-center gap-4">
+        <div className="relative flex-shrink-0">
+          <div className="w-20 h-20 rounded-2xl border-2 border-border overflow-hidden bg-secondary flex items-center justify-center">
+            {form.avatar ? (
+              <img src={form.avatar} alt="Persona avatar" className="w-full h-full object-cover" />
+            ) : (
+              <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                <User size={24} />
+                <span className="text-[10px]">No avatar</span>
+              </div>
+            )}
+            {generatingAvatar && (
+              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+                <RefreshCw size={20} className="text-primary animate-spin" />
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium mb-1.5">
+            {form.avatar ? "Avatar Generated" : "Generate AI Avatar"}
+          </p>
+          <p className="text-xs text-muted-foreground mb-2.5 leading-relaxed">
+            {form.avatar
+              ? "Click Regenerate to create a new one."
+              : "Fill in Name & Role, then generate a unique portrait."}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={generateAvatar}
+            disabled={!canGenerateAvatar || generatingAvatar}
+            className="h-8 text-xs border-border gap-1.5 hover:border-primary/60 disabled:opacity-40"
+          >
+            {generatingAvatar ? (
+              <><RefreshCw size={12} className="animate-spin" /> Generating…</>
+            ) : form.avatar ? (
+              <><RefreshCw size={12} /> Regenerate</>
+            ) : (
+              <><Sparkles size={12} /> Generate Avatar</>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <div className="h-px bg-border" />
+
       {/* Name */}
       <div className="space-y-1.5">
         <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
