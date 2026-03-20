@@ -241,7 +241,7 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
           </div>
         ))}
 
-        {isLoading && <TypingIndicator />}
+        {isLoading && <TypingIndicator persona={persona} />}
         <div ref={bottomRef} />
       </div>
 
