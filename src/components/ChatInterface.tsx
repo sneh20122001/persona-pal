@@ -216,15 +216,13 @@ export default function ChatInterface({ persona, onBack }: ChatInterfaceProps) {
             }`}
           >
             {/* Avatar */}
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                msg.role === "assistant"
-                  ? "bg-primary/20 border border-primary/30 text-primary"
-                  : "bg-secondary border border-border text-muted-foreground"
-              }`}
-            >
-              {msg.role === "assistant" ? getInitials(persona.name) : <User size={14} />}
-            </div>
+            {msg.role === "assistant" ? (
+              <PersonaAvatar persona={persona} size="sm" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center flex-shrink-0 text-muted-foreground">
+                <User size={14} />
+              </div>
+            )}
 
             {/* Bubble */}
             <div
