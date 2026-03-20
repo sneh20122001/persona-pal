@@ -2,3 +2,7 @@ project_id = "pyahcsovdmgpvxvhrqfu"
 
 [functions.persona-chat]
 verify_jwt = false
+
+[functions.generate-avatar]
+verify_jwt = false
+
